@@ -14,13 +14,16 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
  -->
-<resources>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
 	<string name="app_name">AndTweet</string>
 	<string name="activity_title_direct_messages">Messages</string>
 	<string name="activity_title_format">%1$s: %2$s</string>
 	<string name="activity_title_mentions">Mentions</string>
 	<string name="activity_title_search">Search</string>
 	<string name="activity_title_timeline">Friends</string>
+    <string name="appwidget_configure_instructions">Here we will add some configuration settings for the AndTweet Widget...</string>
+    <string name="appwidget_prefix_default">AndTweet: </string>
+    <string name="appwidget_text_format"><xliff:g id="prefix">%1$s</xliff:g>: <xliff:g id="time">%2$s</xliff:g></string>
 	<string name="authentication_successful">Authentication successful!</string>
 	<string name="button_send">Send</string>
 	<string name="cannot_send_empty_message">Cannot send empty message.</string>
@@ -74,6 +77,7 @@
 	<string name="menu_item_view_profile">View Profile</string>
 	<string name="message_sent">Your message has been sent.</string>
 	<string name="messages_activity">Direct Messages</string>
+	<string name="notification_clear">Nothing new...</string>
 	<string name="notification_title">AndTweet</string>
 	<string name="notification_tweet_singular">{0} new tweet</string>
 	<string name="notification_tweet_plural">{0,number} new tweets</string>
