@@ -27,7 +27,7 @@
     />
 
     <EditText
-        android:id="@+id/appwidget_prefix"
+        android:id="@+id/appwidget_title"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
     />

@@ -20,15 +20,11 @@ import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 
-import java.util.ArrayList;
-
-// Need the following import to get access to the app resources, since this
 // class is in a sub-package.
 import com.xorcode.andtweet.R;
 
@@ -36,102 +32,80 @@ import com.xorcode.andtweet.R;
  * The configuration screen for the AndTweetAppWidgetProvider widget.
  */
 public class AndTweetAppWidgetConfigure extends Activity {
-    static final String TAG = AndTweetAppWidgetConfigure.class.getSimpleName();
+	static final String TAG = AndTweetAppWidgetConfigure.class.getSimpleName();
 
-    private static final String PREFS_NAME
-            = "com.xorcode.andtweet.appwidget.AndTweetAppWidgetProvider";
-    private static final String PREF_PREFIX_KEY = "prefix_";
+	int mAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
+	EditText mAppWidgetTitle;
 
-    int mAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
-    EditText mAppWidgetPrefix;
+	public AndTweetAppWidgetConfigure() {
+		super();
+	}
 
-    public AndTweetAppWidgetConfigure() {
-        super();
-    }
+	@Override
+	public void onCreate(Bundle icicle) {
+		super.onCreate(icicle);
 
-    @Override
-    public void onCreate(Bundle icicle) {
-        super.onCreate(icicle);
+		// Set the result to CANCELED. This will cause the widget host to cancel
+		// out of the widget placement if they press the back button.
+		setResult(RESULT_CANCELED);
 
-        // Set the result to CANCELED.  This will cause the widget host to cancel
-        // out of the widget placement if they press the back button.
-        setResult(RESULT_CANCELED);
+		// Set the view layout resource to use.
+		setContentView(R.layout.appwidget_configure);
 
-        // Set the view layout resource to use.
-        setContentView(R.layout.appwidget_configure);
+		// Find the EditText
+		mAppWidgetTitle = (EditText) findViewById(R.id.appwidget_title);
 
-        // Find the EditText
-        mAppWidgetPrefix = (EditText)findViewById(R.id.appwidget_prefix);
+		// Bind the action for the save button.
+		findViewById(R.id.save_button).setOnClickListener(mOnClickListener);
 
-        // Bind the action for the save button.
-        findViewById(R.id.save_button).setOnClickListener(mOnClickListener);
+		// Find the widget id from the intent.
+		Intent intent = getIntent();
+		Bundle extras = intent.getExtras();
+		if (extras != null) {
+			mAppWidgetId = extras.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID,
+					AppWidgetManager.INVALID_APPWIDGET_ID);
+		}
+		Log.d(TAG, "mAppWidgetId=" + mAppWidgetId);
 
-        // Find the widget id from the intent. 
-        Intent intent = getIntent();
-        Bundle extras = intent.getExtras();
-        if (extras != null) {
-            mAppWidgetId = extras.getInt(
-                    AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
-        }
-        Log.d(TAG, "mAppWidgetId=" + mAppWidgetId);
+		// If they gave us an intent without the widget id, just bail.
+		if (mAppWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+			finish();
+		}
 
-        // If they gave us an intent without the widget id, just bail.
-        if (mAppWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-            finish();
-        }
+		AndTweetAppWidgetData appWidgetData = new AndTweetAppWidgetData(this,
+				mAppWidgetId);
+		appWidgetData.load();
+		
+		// For now we have only one setting to configure:
+		mAppWidgetTitle.setText(appWidgetData.titlePref);
+	}
 
-        mAppWidgetPrefix.setText(loadTitlePref(AndTweetAppWidgetConfigure.this, mAppWidgetId));
-    }
+	View.OnClickListener mOnClickListener = new View.OnClickListener() {
+		public void onClick(View v) {
+			final Context context = AndTweetAppWidgetConfigure.this;
 
-    View.OnClickListener mOnClickListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            final Context context = AndTweetAppWidgetConfigure.this;
+			// When the button is clicked, save configuration settings in our prefs
+			// and return that they clicked OK.
+			AndTweetAppWidgetData appWidgetData = new AndTweetAppWidgetData(
+					context, mAppWidgetId);
+			appWidgetData.load();
+			appWidgetData.titlePref = mAppWidgetTitle.getText().toString();
+			appWidgetData.save();
 
-            // When the button is clicked, save the string in our prefs and return that they
-            // clicked OK.
-            String titlePrefix = mAppWidgetPrefix.getText().toString();
-            saveTitlePref(context, mAppWidgetId, titlePrefix);
+			// Push widget update to surface with newly set prefix
+			int[] appWidgetIds = { mAppWidgetId };
+			Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+			intent.putExtra(
+					android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS,
+					appWidgetIds);
+			sendBroadcast(intent);
 
-            // Push widget update to surface with newly set prefix
-            int[] appWidgetIds = {mAppWidgetId};
-    		Intent intent = new Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-    		intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds);
-    		sendBroadcast(intent);
-
-            // Make sure we pass back the original appWidgetId
-            Intent resultValue = new Intent();
-            resultValue.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAppWidgetId);
-            setResult(RESULT_OK, resultValue);
-            finish();
-        }
-    };
-
-    // Write the prefix to the SharedPreferences object for this widget
-    static void saveTitlePref(Context context, int appWidgetId, String text) {
-        SharedPreferences.Editor prefs = context.getSharedPreferences(PREFS_NAME, 0).edit();
-        prefs.putString(PREF_PREFIX_KEY + appWidgetId, text);
-        prefs.commit();
-    }
-
-    // Read the prefix from the SharedPreferences object for this widget.
-    // If there is no preference saved, get the default from a resource
-    static String loadTitlePref(Context context, int appWidgetId) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, 0);
-        String prefix = prefs.getString(PREF_PREFIX_KEY + appWidgetId, null);
-        if (prefix != null) {
-            return prefix;
-        } else {
-            return context.getString(R.string.appwidget_prefix_default);
-        }
-    }
-
-    static void deleteTitlePref(Context context, int appWidgetId) {
-    }
-
-    static void loadAllTitlePrefs(Context context, ArrayList<Integer> appWidgetIds,
-            ArrayList<String> texts) {
-    }
+			// Make sure we pass back the original appWidgetId
+			Intent resultValue = new Intent();
+			resultValue.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+					mAppWidgetId);
+			setResult(RESULT_OK, resultValue);
+			finish();
+		}
+	};
 }
-
-
-

@@ -17,5 +17,8 @@
 <resources>
    <style name="WidgetStyle">
         <item name="android:background">@drawable/widget_bg</item>
-    </style>
+   </style>
+   <style name="EmptyStyle">
+        <item name="android:background">#00000000</item>
+   </style>    
 </resources>

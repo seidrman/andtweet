@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+	<!-- This is layout of the AppWidget shown on the Home Screen -->
+
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/widget" android:layout_height="wrap_content"
+	android:focusable="true" android:layout_width="wrap_content" style="@style/WidgetStyle"
+	android:paddingLeft="20px" android:paddingTop="24px"
+	android:paddingRight="20px" android:paddingBottom="24px">
+
+	<ImageView android:id="@+id/icon" android:layout_width="wrap_content"
+		android:layout_height="wrap_content" android:src="@drawable/icon"
+		android:layout_alignParentRight="false"
+		android:layout_alignParentLeft="true" />
+	<RelativeLayout android:id="@+id/right_column"
+		android:layout_height="wrap_content" android:focusable="true"
+		android:layout_width="wrap_content"
+		android:paddingLeft="2px" android:layout_toRightOf="@+id/icon" style="@style/EmptyStyle">
+		<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+			android:id="@+id/appwidget_title" android:layout_width="wrap_content"
+			android:layout_height="wrap_content" android:textColor="#ff000000"
+			android:layout_alignParentTop="true" android:layout_alignParentLeft="true" android:textStyle="bold"/>
+
+		<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+			android:id="@+id/appwidget_text" android:layout_width="wrap_content"
+			android:layout_height="wrap_content" android:textColor="#ff000000"
+			android:layout_below="@+id/appwidget_title" />
+	</RelativeLayout>
+
+</RelativeLayout>

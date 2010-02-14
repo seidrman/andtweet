@@ -21,8 +21,9 @@
 	<string name="activity_title_mentions">Mentions</string>
 	<string name="activity_title_search">Search</string>
 	<string name="activity_title_timeline">Friends</string>
-    <string name="appwidget_configure_instructions">Here we will add some configuration settings for the AndTweet Widget...</string>
-    <string name="appwidget_prefix_default">AndTweet: </string>
+    <string name="appwidget_configure_instructions">Here we will add some configuration settings for the AndTweet Widget...
+    Set Widget title below:</string>
+    <string name="appwidget_title_default">AndTweet</string>
     <string name="appwidget_text_format"><xliff:g id="prefix">%1$s</xliff:g>: <xliff:g id="time">%2$s</xliff:g></string>
 	<string name="authentication_successful">Authentication successful!</string>
 	<string name="button_send">Send</string>

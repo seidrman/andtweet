@@ -1,23 +1,4 @@
-/*
- * Copyright (C) 2008 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.xorcode.andtweet.appwidget;
-
-import java.text.ChoiceFormat;
-import java.text.MessageFormat;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -34,30 +15,28 @@ import com.xorcode.andtweet.AndTweetService;
 import static com.xorcode.andtweet.AndTweetService.*;
 
 /**
- * A widget provider.  We have a string that we pull from a preference in order to show
- * the configuration settings and the current time when the widget was updated.  We also
- * register a BroadcastReceiver for time-changed and timezone-changed broadcasts, and
- * update then too.
- *
- * <p>See also the following files:
- * <ul>
- *   <li>AndTweetAppWidgetConfigure.java</li>
- *   <li>AndTweetBroadcastReceiver.java</li>
- *   <li>res/layout/appwidget_configure.xml</li>
- *   <li>res/layout/appwidget_provider.xml</li>
- *   <li>res/xml/appwidget_provider.xml</li>
- * </ul>
- */
-/**
- * @author yvolk@yurivolkov.com
+ * A widget provider. If uses AndTweetAppWidgetData to store preferences and to
+ * accumulate data (notifications...) received.
  * 
+ * <p>
+ * See also the following files:
+ * <ul>
+ * <li>AndTweetAppWidgetData.java</li>
+ * <li>AndTweetAppWidgetConfigure.java</li>
+ * <li>res/layout/appwidget_configure.xml</li>
+ * <li>res/layout/appwidget.xml</li>
+ * <li>res/xml/appwidget_provider.xml</li>
+ * </ul>
+ * 
+ * @author yvolk (Yuri Volkov), http://yurivolkov.com
  */
 public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 	// log tag
 	private static final String TAG = AndTweetAppWidgetProvider.class
 			.getSimpleName();
+
 	private int msgType = AndTweetService.NOTIFY_INVALID;
-	private int numTweets = 0;
+	private int numSomethingReceived = 0;
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
@@ -70,7 +49,8 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 			Bundle extras = intent.getExtras();
 			if (extras != null) {
 				msgType = extras.getInt(AndTweetService.EXTRA_MSGTYPE);
-				numTweets = extras.getInt(AndTweetService.EXTRA_NUMTWEETS);
+				numSomethingReceived = extras
+						.getInt(AndTweetService.EXTRA_NUMTWEETS);
 				int[] appWidgetIds = extras
 						.getIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS);
 				if (appWidgetIds == null || appWidgetIds.length == 0) {
@@ -93,6 +73,29 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 				updateAppWidget(context, AppWidgetManager.getInstance(context),
 						AppWidgetManager.INVALID_APPWIDGET_ID);
 				done = true;
+			}
+		} else if (AppWidgetManager.ACTION_APPWIDGET_DELETED.equals(action)) {
+			Log.d(TAG, "Action APPWIDGET_DELETED was received");
+			Bundle extras = intent.getExtras();
+			if (extras != null) {
+				int[] appWidgetIds = extras
+						.getIntArray(AppWidgetManager.EXTRA_APPWIDGET_IDS);
+				if (appWidgetIds != null && appWidgetIds.length > 0) {
+					onDeleted(context, appWidgetIds);
+					done = true;
+				} else {
+					// For some reason this is required for Android v.1.5
+					int appWidgetId = extras
+					.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID);
+					if (appWidgetId != 0) {
+						int[] appWidgetIds2 = {appWidgetId};
+						onDeleted(context, appWidgetIds2);
+						done = true;
+					}
+				}
+			} 
+			if (!done) {
+				Log.d(TAG, "Deletion was not done, extras='" + extras.toString() + "'");
 			}
 		}
 		if (!done) {
@@ -119,56 +122,22 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 	@Override
 	public void onDeleted(Context context, int[] appWidgetIds) {
 		Log.d(TAG, "onDeleted");
-		// When the user deletes the widget, delete the preference associated
+		// When the user deletes the widget, delete all preferences associated
 		// with it.
 		final int N = appWidgetIds.length;
 		for (int i = 0; i < N; i++) {
-			AndTweetAppWidgetConfigure
-					.deleteTitlePref(context, appWidgetIds[i]);
+			new AndTweetAppWidgetData(context, appWidgetIds[i]).delete();
 		}
 	}
 
 	@Override
 	public void onEnabled(Context context) {
 		Log.d(TAG, "onEnabled");
-		// TODO: Delete these lines...
-		// When the first widget is created, register for the TIMEZONE_CHANGED
-		// and TIME_CHANGED
-		// broadcasts. We don't want to be listening for these if nobody has our
-		// widget active.
-		// This setting is sticky across reboots, but that doesn't matter,
-		// because this will
-		// be called after boot if there is a widget instance for this provider.
-		// PackageManager pm = context.getPackageManager();
-		// pm.setComponentEnabledSetting(
-		// new ComponentName("com.xorcode.andtweet",
-		// ".appwidget.AndTweetBroadcastReceiver"),
-		// PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-		// PackageManager.DONT_KILL_APP);
-
-		// This doesn't work:
-		// context.registerReceiver(this,
-		// new
-		// android.content.IntentFilter(android.content.Intent.ACTION_TIMEZONE_CHANGED));
-
-		// See /ApiDemos/src/com/example/android/apis/app/AlarmController.java
-		// on how to implement AlarmManager...
 	}
 
 	@Override
 	public void onDisabled(Context context) {
 		Log.d(TAG, "onDisabled");
-
-		// TODO: Delete these lines...
-		// When the first widget is created, stop listening for the
-		// TIMEZONE_CHANGED and
-		// TIME_CHANGED broadcasts.
-		// PackageManager pm = context.getPackageManager();
-		// pm.setComponentEnabledSetting(
-		// new ComponentName("com.xorcode.andtweet",
-		// ".appwidget.AndTweetBroadcastReceiver"),
-		// PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-		// PackageManager.DONT_KILL_APP);
 
 	}
 
@@ -184,72 +153,78 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 			int appWidgetId) {
 		Log.d(TAG, "updateAppWidget appWidgetId=" + appWidgetId);
 
-		String titlePref;
-		if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-			titlePref = "";
-		} else {
-			titlePref = AndTweetAppWidgetConfigure.loadTitlePref(context,
-					appWidgetId);
-		}
+		// TODO:
+		// see /ApiDemos/src/com/example/android/apis/app/AlarmController.java
+		// on how to implement AlarmManager...
 
-		// TODO: Widget design...
-		int messageTitle = 0;
-		int messageFormat = 0;
-		int singular = 0;
-		int plural = 0;
-		String aMessage = "";
+		AndTweetAppWidgetData data = new AndTweetAppWidgetData(context,
+				appWidgetId);
+		data.load();
 
+		// Calculate new values
 		switch (msgType) {
 		case NOTIFY_REPLIES:
-			messageFormat = R.string.notification_new_mention_format;
-			singular = R.string.notification_mention_singular;
-			plural = R.string.notification_mention_plural;
-			messageTitle = R.string.notification_title_mentions;
+			data.numMentions += numSomethingReceived;
 			break;
 
 		case NOTIFY_DIRECT_MESSAGE:
-			messageFormat = R.string.notification_new_message_format;
-			singular = R.string.notification_message_singular;
-			plural = R.string.notification_message_plural;
-			messageTitle = R.string.notification_title_messages;
+			data.numMessages += numSomethingReceived;
 			break;
 
 		case NOTIFY_TIMELINE:
-			messageFormat = R.string.notification_new_tweet_format;
-			singular = R.string.notification_tweet_singular;
-			plural = R.string.notification_tweet_plural;
-			messageTitle = R.string.notification_title;
+			data.numTweets += numSomethingReceived;
 			break;
 
 		case NOTIFY_CLEAR:
-		default:
-			singular = R.string.notification_clear;
+			data.numMentions = 0;
+			data.numMessages = 0;
+			data.numTweets = 0;
 			break;
+
+		default:
+			// change nothing
 		}
 
-		// Set up the message
-		if (messageFormat == 0) {
-			aMessage = context.getText(singular).toString();
-		} else {
-			MessageFormat form = new MessageFormat(context.getText(
-					messageFormat).toString());
-			Object[] formArgs = new Object[] { numTweets };
-			double[] tweetLimits = { 1, 2 };
-			String[] tweetPart = { context.getText(singular).toString(),
-					context.getText(plural).toString() };
-			ChoiceFormat tweetForm = new ChoiceFormat(tweetLimits, tweetPart);
-			form.setFormatByArgumentIndex(0, tweetForm);
-			aMessage = titlePref + " " + form.format(formArgs) + " "
-			// + context.getText(messageTitle)
-			;
+		// TODO: Widget design...
+		String widgetTitle = "";
+		String widgetText = "";
+		
+		widgetTitle = data.titlePref;
+		boolean isFound = false;
+
+		if (data.numMentions > 0) {
+			isFound = true;
+			widgetText += (widgetText.length()>0 ? "; " : "")
+					+ formatMessage(context,
+							R.string.notification_new_mention_format,
+							data.numMentions,
+							R.string.notification_mention_singular,
+							R.string.notification_mention_plural);
+		}
+		if (data.numMessages > 0) {
+			isFound = true;
+			widgetText += (widgetText.length()>0 ? "; " : "")
+					+ formatMessage(context,
+							R.string.notification_new_message_format,
+							data.numMessages,
+							R.string.notification_message_singular,
+							R.string.notification_message_plural);
+		}
+		if (data.numTweets > 0) {
+			isFound = true;
+			widgetText += (widgetText.length()>0 ? "; " : "")
+					+ formatMessage(context,
+							R.string.notification_new_tweet_format,
+							data.numTweets,
+							R.string.notification_tweet_singular,
+							R.string.notification_tweet_plural);
+		}
+		if (!isFound) {
+			widgetText += (widgetText.length()>0 ? "; " : "")
+			+ context.getText(R.string.notification_clear);
 		}
 
-		Log.d(TAG, "updateAppWidget aMessage=\"" + aMessage + "\"");
-
-		// Getting the string this way allows the string to be localized. The
-		// format
-		// string is filled in using java.util.Formatter-style format strings.
-		CharSequence text = aMessage;
+		Log.d(TAG, "updateAppWidget aMessage=\"" + widgetText + "\"");
 
 		// Construct the RemoteViews object. It takes the package name (in our
 		// case, it's our
@@ -257,8 +232,14 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 		// host inflating
 		// the layout from our package).
 		RemoteViews views = new RemoteViews(context.getPackageName(),
-				R.layout.appwidget_provider);
-		views.setTextViewText(R.id.appwidget_text, text);
+				R.layout.appwidget);
+		
+		if (widgetTitle.length()==0) {
+			views.setViewVisibility(R.id.appwidget_title, android.view.View.GONE);
+		} else {
+			views.setTextViewText(R.id.appwidget_title, widgetTitle);
+		}
+		views.setTextViewText(R.id.appwidget_text, widgetText);
 
 		// When user clicks on widget, launch main AndTweet activity
 		// Intent defineIntent = new Intent(android.content.Intent.ACTION_MAIN);
@@ -271,10 +252,29 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 
 		// Tell the widget manager
 		if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+			// TODO: Is this right?
+			// All instances will be updated
 			appWidgetManager.updateAppWidget(new ComponentName(context, this
 					.getClass()), views);
 		} else {
+			data.save();
 			appWidgetManager.updateAppWidget(appWidgetId, views);
 		}
+	}
+
+	private String formatMessage(Context context, int messageFormat,
+			int numSomething, int singular, int plural) {
+		String aMessage = "";
+		java.text.MessageFormat form = new java.text.MessageFormat(context
+				.getText(messageFormat).toString());
+		Object[] formArgs = new Object[] { numSomething };
+		double[] tweetLimits = { 1, 2 };
+		String[] tweetPart = { context.getText(singular).toString(),
+				context.getText(plural).toString() };
+		java.text.ChoiceFormat tweetForm = new java.text.ChoiceFormat(
+				tweetLimits, tweetPart);
+		form.setFormatByArgumentIndex(0, tweetForm);
+		aMessage = form.format(formArgs);
+		return aMessage;
 	}
 }
