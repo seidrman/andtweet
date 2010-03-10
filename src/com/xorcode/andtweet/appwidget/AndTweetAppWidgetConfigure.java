@@ -36,6 +36,7 @@ public class AndTweetAppWidgetConfigure extends Activity {
 
 	int mAppWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID;
 	EditText mAppWidgetTitle;
+	AndTweetAppWidgetData appWidgetData;
 
 	public AndTweetAppWidgetConfigure() {
 		super();
@@ -72,12 +73,12 @@ public class AndTweetAppWidgetConfigure extends Activity {
 			finish();
 		}
 
-		AndTweetAppWidgetData appWidgetData = new AndTweetAppWidgetData(this,
+		appWidgetData = new AndTweetAppWidgetData(this,
 				mAppWidgetId);
 		appWidgetData.load();
 		
 		// For now we have only one setting to configure:
-		mAppWidgetTitle.setText(appWidgetData.titlePref);
+		mAppWidgetTitle.setText(appWidgetData.nothingPref);
 	}
 
 	View.OnClickListener mOnClickListener = new View.OnClickListener() {
@@ -86,10 +87,8 @@ public class AndTweetAppWidgetConfigure extends Activity {
 
 			// When the button is clicked, save configuration settings in our prefs
 			// and return that they clicked OK.
-			AndTweetAppWidgetData appWidgetData = new AndTweetAppWidgetData(
-					context, mAppWidgetId);
-			appWidgetData.load();
-			appWidgetData.titlePref = mAppWidgetTitle.getText().toString();
+			appWidgetData.nothingPref = mAppWidgetTitle.getText().toString();
+			appWidgetData.clear();
 			appWidgetData.save();
 
 			// Push widget update to surface with newly set prefix

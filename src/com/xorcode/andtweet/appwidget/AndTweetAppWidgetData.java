@@ -11,9 +11,9 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 /**
- * The class maintains the appWidget instance (defined by mappWidgetId):
- * - state (that changes when new tweets etc. arrive);
- * - preferences (that are set once in the appWidget configuration activity.
+ * The class maintains the appWidget instance (defined by mappWidgetId): - state
+ * (that changes when new tweets etc. arrive); - preferences (that are set once
+ * in the appWidget configuration activity.
  * 
  * @author yvolk (Yuri Volkov), http://yurivolkov.com
  */
@@ -36,9 +36,17 @@ public class AndTweetAppWidgetData {
 	public static final String PREF_NUM_MENTIONS_KEY = "num_mentions";
 	public static final String PREF_NUM_MESSAGES_KEY = "num_messages";
 	/**
-	 * Starting words in the appWidget...
-	 * */
-	public static final String PREF_TITLE_KEY = "title";
+	 * Words shown in a case there is nothing new
+	 */
+	public static final String PREF_NOTHING_KEY = "nothing";
+	/**
+	 *	Date and time when counters where cleared
+	 */
+	public static final String PREF_DATECLEARED_KEY = "datecleared";
+	/**
+	 *	Date and time when data was updated last time
+	 */
+	public static final String PREF_DATEUPDATED_KEY = "dateupdated";
 
 	private Context mContext;
 	private int mappWidgetId;
@@ -46,7 +54,7 @@ public class AndTweetAppWidgetData {
 
 	private boolean isLoaded = false;
 
-	public String titlePref = "";
+	public String nothingPref = "";
 
 	// Numbers of new Tweets accumulated
 	// TODO: GETTER AND SETTER METHODS, REMEMBER "OLD VALUE"...
@@ -54,12 +62,27 @@ public class AndTweetAppWidgetData {
 	public int numMentions = 0;
 	public int numMessages = 0;
 
+	// When counters where cleared
+	public long dateCleared = 0;
+	// When data was updated  last time
+	public long dateUpdated = 0;
+ 	public boolean changed = false;
+	
 	public AndTweetAppWidgetData(Context context, int appWidgetId) {
 		mContext = context;
 		mappWidgetId = appWidgetId;
 		prefsFileName = PREFS_FILE_NAME + mappWidgetId;
 	}
 
+	public void clear() {
+		numMentions = 0;
+		numMessages = 0;
+		numTweets = 0;
+		dateCleared = Long.valueOf(System.currentTimeMillis());
+		dateUpdated = dateCleared;
+		changed = true;
+	}
+	
 	public boolean load() {
 		boolean Ok = false;
 		SharedPreferences prefs = mContext.getSharedPreferences(prefsFileName,
@@ -67,18 +90,27 @@ public class AndTweetAppWidgetData {
 		if (prefs == null) {
 			Log.e(TAG, "The prefs file '" + prefsFileName + "' was not loaded");
 		} else {
-			titlePref = prefs.getString(PREF_TITLE_KEY, null);
-			if (titlePref == null) {
-				titlePref = mContext
-						.getString(R.string.appwidget_title_default)
-						+ " " + mappWidgetId;
+			nothingPref = prefs.getString(PREF_NOTHING_KEY, null);
+			if (nothingPref == null) {
+				nothingPref = mContext
+						.getString(R.string.appwidget_nothing_default);
+				// TODO Add AndTweet Debug option...
+//				if (debug) {
+//					nothingPref += " (" + mappWidgetId + ")";
+//				}
 			}
-			numTweets = prefs.getInt(PREF_NUM_TWEETS_KEY, 0);
-			numMentions = prefs.getInt(PREF_NUM_MENTIONS_KEY, 0);
-			numMessages = prefs.getInt(PREF_NUM_MESSAGES_KEY, 0);
+			dateCleared = prefs.getLong(PREF_DATECLEARED_KEY, 0);
+			if (dateCleared == 0) {
+				clear();
+			} else {
+				numTweets = prefs.getInt(PREF_NUM_TWEETS_KEY, 0);
+				numMentions = prefs.getInt(PREF_NUM_MENTIONS_KEY, 0);
+				numMessages = prefs.getInt(PREF_NUM_MESSAGES_KEY, 0);
+				dateUpdated = prefs.getLong(PREF_DATEUPDATED_KEY, 0);
+			}
 
 			Log.d(TAG, "Prefs for appWidgetId=" + mappWidgetId
-							+ " were loaded");
+				+ " were loaded");
 			Ok = true;
 			isLoaded = Ok;
 		}
@@ -95,12 +127,19 @@ public class AndTweetAppWidgetData {
 			if (prefs == null) {
 				Log.e(TAG, "Prefs Editor was not loaded");
 			} else {
-				prefs.putString(PREF_TITLE_KEY, titlePref);
+				prefs.putString(PREF_NOTHING_KEY, nothingPref);
 				prefs.putInt(PREF_NUM_TWEETS_KEY, numTweets);
 				prefs.putInt(PREF_NUM_MENTIONS_KEY, numMentions);
 				prefs.putInt(PREF_NUM_MESSAGES_KEY, numMessages);
+				
+				prefs.putLong(PREF_DATECLEARED_KEY, dateCleared);
+				if (changed) {
+					dateUpdated = Long.valueOf(System.currentTimeMillis());
+					prefs.putLong(PREF_DATEUPDATED_KEY, dateUpdated);
+				}
 				prefs.commit();
-				Log.d(TAG, "Prefs were saved, title='" + titlePref + "'");
+				Log.d(TAG, "Prefs for appWidgetId=" + mappWidgetId
+				+ "were saved, nonthing='" + nothingPref + "'");
 				Ok = true;
 			}
 		}
@@ -114,11 +153,8 @@ public class AndTweetAppWidgetData {
 		boolean isDeleted = false;
 
 		// Delete preferences file
-		java.io.File prefFile = new java.io.File(
-				"/data/data/"
-				+ mContext.getPackageName()
-				+ "/shared_prefs/"
-				+ prefsFileName
+		java.io.File prefFile = new java.io.File("/data/data/"
+				+ mContext.getPackageName() + "/shared_prefs/" + prefsFileName
 				+ ".xml");
 		if (prefFile.exists()) {
 			// Commit any changes left
@@ -131,8 +167,8 @@ public class AndTweetAppWidgetData {
 
 			isDeleted = prefFile.delete();
 			try {
-				Log.d(TAG, "The prefs file '" + prefFile.getCanonicalPath() + "' was "
-						+ (isDeleted ? "" : "not ") + " deleted");
+				Log.d(TAG, "The prefs file '" + prefFile.getCanonicalPath()
+						+ "' was " + (isDeleted ? "" : "not ") + " deleted");
 			} catch (IOException e) {
 				Log.e(TAG, e.toString());
 			}

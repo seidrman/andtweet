@@ -7,11 +7,19 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+
+import java.util.Calendar; 
+import android.text.format.DateFormat; 
+import android.text.format.DateUtils;
+import android.text.format.Time;
+
 import android.util.Log;
 import android.widget.RemoteViews;
 
 import com.xorcode.andtweet.R;
 import com.xorcode.andtweet.AndTweetService;
+import com.xorcode.andtweet.util.RelativeTime;
+
 import static com.xorcode.andtweet.AndTweetService.*;
 
 /**
@@ -25,7 +33,7 @@ import static com.xorcode.andtweet.AndTweetService.*;
  * <li>AndTweetAppWidgetConfigure.java</li>
  * <li>res/layout/appwidget_configure.xml</li>
  * <li>res/layout/appwidget.xml</li>
- * <li>res/xml/appwidget_provider.xml</li>
+ * <li>res/xml/appwidget_info.xml</li>
  * </ul>
  * 
  * @author yvolk (Yuri Volkov), http://yurivolkov.com
@@ -86,16 +94,17 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 				} else {
 					// For some reason this is required for Android v.1.5
 					int appWidgetId = extras
-					.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID);
+							.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID);
 					if (appWidgetId != 0) {
-						int[] appWidgetIds2 = {appWidgetId};
+						int[] appWidgetIds2 = { appWidgetId };
 						onDeleted(context, appWidgetIds2);
 						done = true;
 					}
 				}
-			} 
+			}
 			if (!done) {
-				Log.d(TAG, "Deletion was not done, extras='" + extras.toString() + "'");
+				Log.d(TAG, "Deletion was not done, extras='"
+						+ extras.toString() + "'");
 			}
 		}
 		if (!done) {
@@ -161,6 +170,9 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 				appWidgetId);
 		data.load();
 
+		if (numSomethingReceived != 0) {
+			data.changed = true;
+		}
 		// Calculate new values
 		switch (msgType) {
 		case NOTIFY_REPLIES:
@@ -176,55 +188,66 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 			break;
 
 		case NOTIFY_CLEAR:
-			data.numMentions = 0;
-			data.numMessages = 0;
-			data.numTweets = 0;
+			data.clear();
 			break;
 
 		default:
 			// change nothing
 		}
+		if (data.changed) {
+			data.save();
+		}
 
 		// TODO: Widget design...
-		String widgetTitle = "";
+
+		// "Text" is what is show in bold
 		String widgetText = "";
-		
-		widgetTitle = data.titlePref;
+		// And the "Comment" is less visible, below the "Text"
+		String widgetComment = "";
+
+		// Construct period of counting...
+		String widgetTime = "";
+		if (data.dateUpdated == 0) {
+			widgetTime = "==0 ???";
+			Log.e(TAG, "data.dateUpdated==0");
+		} else {
+			widgetTime = formatWidgetTime(context, data.dateCleared, data.dateUpdated);
+		}
+
 		boolean isFound = false;
 
 		if (data.numMentions > 0) {
 			isFound = true;
-			widgetText += (widgetText.length()>0 ? "; " : "")
+			widgetText += (widgetText.length() > 0 ? "\n" : "")
 					+ formatMessage(context,
-							R.string.notification_new_mention_format,
+							R.string.appwidget_new_mention_format,
 							data.numMentions,
-							R.string.notification_mention_singular,
-							R.string.notification_mention_plural);
+							R.string.appwidget_mention_singular,
+							R.string.appwidget_mention_plural);
 		}
 		if (data.numMessages > 0) {
 			isFound = true;
-			widgetText += (widgetText.length()>0 ? "; " : "")
+			widgetText += (widgetText.length() > 0 ? "\n" : "")
 					+ formatMessage(context,
-							R.string.notification_new_message_format,
+							R.string.appwidget_new_message_format,
 							data.numMessages,
-							R.string.notification_message_singular,
-							R.string.notification_message_plural);
+							R.string.appwidget_message_singular,
+							R.string.appwidget_message_plural);
 		}
 		if (data.numTweets > 0) {
 			isFound = true;
-			widgetText += (widgetText.length()>0 ? "; " : "")
+			widgetText += (widgetText.length() > 0 ? "\n" : "")
 					+ formatMessage(context,
-							R.string.notification_new_tweet_format,
-							data.numTweets,
-							R.string.notification_tweet_singular,
-							R.string.notification_tweet_plural);
+							R.string.appwidget_new_tweet_format,
+							data.numTweets, R.string.appwidget_tweet_singular,
+							R.string.appwidget_tweet_plural);
 		}
 		if (!isFound) {
-			widgetText += (widgetText.length()>0 ? "; " : "")
-			+ context.getText(R.string.notification_clear);
+			widgetComment = data.nothingPref;
 		}
 
-		Log.d(TAG, "updateAppWidget aMessage=\"" + widgetText + "\"");
+		Log.d(TAG, "updateAppWidget text=\"" + widgetText + "\"; comment=\""
+				+ widgetComment + "\"");
 
 		// Construct the RemoteViews object. It takes the package name (in our
 		// case, it's our
@@ -233,13 +256,28 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 		// the layout from our package).
 		RemoteViews views = new RemoteViews(context.getPackageName(),
 				R.layout.appwidget);
-		
-		if (widgetTitle.length()==0) {
-			views.setViewVisibility(R.id.appwidget_title, android.view.View.GONE);
-		} else {
-			views.setTextViewText(R.id.appwidget_title, widgetTitle);
+
+		if (widgetText.length() == 0) {
+			views
+					.setViewVisibility(R.id.appwidget_text,
+							android.view.View.GONE);
 		}
-		views.setTextViewText(R.id.appwidget_text, widgetText);
+		if (widgetComment.length() == 0) {
+			views.setViewVisibility(R.id.appwidget_comment,
+					android.view.View.GONE);
+		}
+
+		if (widgetText.length() > 0) {
+			views.setViewVisibility(R.id.appwidget_text,
+					android.view.View.VISIBLE);
+			views.setTextViewText(R.id.appwidget_text, widgetText);
+		}
+		if (widgetComment.length() > 0) {
+			views.setViewVisibility(R.id.appwidget_comment,
+					android.view.View.VISIBLE);
+			views.setTextViewText(R.id.appwidget_comment, widgetComment);
+		}
+		views.setTextViewText(R.id.appwidget_time, widgetTime);
 
 		// When user clicks on widget, launch main AndTweet activity
 		// Intent defineIntent = new Intent(android.content.Intent.ACTION_MAIN);
@@ -257,9 +295,117 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 			appWidgetManager.updateAppWidget(new ComponentName(context, this
 					.getClass()), views);
 		} else {
-			data.save();
 			appWidgetManager.updateAppWidget(appWidgetId, views);
 		}
+	}
+
+	public String formatWidgetTime(Context context, long startMillis,
+            long endMillis) {
+		String widgetTime = "";
+		String strStart = "";
+		String strEnd = "";
+
+		if (endMillis == 0) {
+			widgetTime = "=0 ???";
+			Log.e(TAG, "data.dateUpdated==0");
+		} else {
+			Time timeStart = new Time();
+			timeStart.set(startMillis);
+			Time timeEnd = new Time();
+			timeEnd.set(endMillis);
+			int flags = 0;
+
+			if (timeStart.yearDay < timeEnd.yearDay) {
+				strStart = RelativeTime.getDifference(context, startMillis);
+				if (DateUtils.isToday(endMillis)) {
+					// End - today
+		            flags = DateUtils.FORMAT_SHOW_TIME;
+		            if (DateFormat.is24HourFormat(context)) {
+		                flags |= DateUtils.FORMAT_24HOUR;
+		            }
+					strEnd = DateUtils.formatDateTime(context, endMillis, flags);
+				} else {
+					strEnd = RelativeTime.getDifference(context, endMillis);
+				}
+			} else {
+				// Same day
+				if (DateUtils.isToday(endMillis)) {
+					// Start and end - today
+		            flags = DateUtils.FORMAT_SHOW_TIME;
+		            if (DateFormat.is24HourFormat(context)) {
+		                flags |= DateUtils.FORMAT_24HOUR;
+		            }
+					strStart = DateUtils.formatDateTime(context, startMillis, flags);
+					strEnd = DateUtils.formatDateTime(context, endMillis, flags);
+
+				} else {
+					strStart = RelativeTime.getDifference(context, endMillis);
+				}
+			}
+			widgetTime = strStart;
+			if (strEnd.length()>0) {
+				if (strEnd.compareTo(strStart) != 0) {
+					if (widgetTime.length()>0) {
+						widgetTime += " - ";
+					}
+					widgetTime += strEnd;
+				}
+			}
+			
+			
+			/*
+			if (DateUtils.isToday(endMillis)) {
+	            flags |= DateUtils.FORMAT_SHOW_TIME;
+	            if (DateFormat.is24HourFormat(context)) {
+	                flags |= DateUtils.FORMAT_24HOUR;
+	            }
+			} else {
+	            flags |= DateUtils.FORMAT_SHOW_DATE;
+			}
+
+			widgetTime = DateUtils.formatDateRange(context, startMillis, endMillis, flags);
+			*/
+
+			/*
+			if (timeStart.yearDay < timeEnd.yearDay) {
+				strStart = new RelativeTime(startMillis).getDifference(context, timeNow.toMillis(false));
+				if (DateUtils.isToday(endMillis)) {
+					// End - today
+				} else {
+					strEnd = new RelativeTime(endMillis).getDifference(context, timeNow.toMillis(false));
+				}
+			}
+			
+			widgetTime = android.text.format.DateUtils
+					.formatDateTime(
+							context,
+							startMillis,
+							android.text.format.DateUtils.FORMAT_SHOW_TIME
+									| android.text.format.DateUtils.FORMAT_SHOW_DATE
+									| android.text.format.DateUtils.FORMAT_SHOW_WEEKDAY);
+			  widgetTime = RelativeTime.getDifference(context,
+			  startMillis);
+	
+	
+			widgetTime = android.text.format.DateUtils.formatSameDayTime(
+					startMillis, System.currentTimeMillis(),
+					java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
+					.toString();
+	
+			if (endMillis != startMillis) {
+				String widgetTime2 = android.text.format.DateUtils
+						.formatSameDayTime(endMillis,
+								System.currentTimeMillis(),
+								java.text.DateFormat.SHORT,
+								java.text.DateFormat.SHORT).toString();
+				if (widgetTime.compareTo(widgetTime2) != 0) {
+					widgetTime += " - " + widgetTime2;
+				}
+			}
+			 */
+		}		
+		
+		return widgetTime;
 	}
 
 	private String formatMessage(Context context, int messageFormat,
