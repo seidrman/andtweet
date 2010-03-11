@@ -45,6 +45,8 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 
 	private int msgType = AndTweetService.NOTIFY_INVALID;
 	private int numSomethingReceived = 0;
+	private static Object xlock = new Object();
+	private long instanceId = Math.abs(new java.util.Random().nextInt());
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
@@ -53,7 +55,7 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 		String action = intent.getAction();
 
 		if (AndTweetService.ACTION_APPWIDGET_UPDATE.equals(action)) {
-			Log.d(TAG, "Intent from AndTweetService received!");
+			Log.d(TAG, "inst=" + instanceId + "; Intent from AndTweetService received!");
 			Bundle extras = intent.getExtras();
 			if (extras != null) {
 				msgType = extras.getInt(AndTweetService.EXTRA_MSGTYPE);
@@ -82,6 +84,7 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 						AppWidgetManager.INVALID_APPWIDGET_ID);
 				done = true;
 			}
+			Log.d(TAG, "inst=" + instanceId + "; Intent from AndTweetService processed");
 		} else if (AppWidgetManager.ACTION_APPWIDGET_DELETED.equals(action)) {
 			Log.d(TAG, "Action APPWIDGET_DELETED was received");
 			Bundle extras = intent.getExtras();
@@ -160,142 +163,155 @@ public class AndTweetAppWidgetProvider extends AppWidgetProvider {
 	 */
 	void updateAppWidget(Context context, AppWidgetManager appWidgetManager,
 			int appWidgetId) {
-		Log.d(TAG, "updateAppWidget appWidgetId=" + appWidgetId);
+		boolean Ok = false;
+		try {
+			Log.d(TAG, "inst=" + instanceId + "; updateAppWidget appWidgetId=" + appWidgetId 
+					+ "; msgType=" + msgType);
 
-		// TODO:
-		// see /ApiDemos/src/com/example/android/apis/app/AlarmController.java
-		// on how to implement AlarmManager...
+			// TODO:
+			// see /ApiDemos/src/com/example/android/apis/app/AlarmController.java
+			// on how to implement AlarmManager...
 
-		AndTweetAppWidgetData data = new AndTweetAppWidgetData(context,
-				appWidgetId);
-		data.load();
+			AndTweetAppWidgetData data;		
+			synchronized(xlock) {
+				data = new AndTweetAppWidgetData(context,
+						appWidgetId);
+				data.load();
+		
+				if (numSomethingReceived != 0) {
+					data.changed = true;
+				}
+				// Calculate new values
+				switch (msgType) {
+				case NOTIFY_REPLIES:
+					data.numMentions += numSomethingReceived;
+					break;
+		
+				case NOTIFY_DIRECT_MESSAGE:
+					data.numMessages += numSomethingReceived;
+					break;
+		
+				case NOTIFY_TIMELINE:
+					data.numTweets += numSomethingReceived;
+					break;
+		
+				case NOTIFY_CLEAR:
+					data.clear();
+					break;
+		
+				default:
+					// change nothing
+				}
+				if (data.changed) {
+					data.save();
+				}
+			}
 
-		if (numSomethingReceived != 0) {
-			data.changed = true;
-		}
-		// Calculate new values
-		switch (msgType) {
-		case NOTIFY_REPLIES:
-			data.numMentions += numSomethingReceived;
-			break;
+			// TODO: Widget design...
 
-		case NOTIFY_DIRECT_MESSAGE:
-			data.numMessages += numSomethingReceived;
-			break;
+			// "Text" is what is show in bold
+			String widgetText = "";
+			// And the "Comment" is less visible, below the "Text"
+			String widgetComment = "";
 
-		case NOTIFY_TIMELINE:
-			data.numTweets += numSomethingReceived;
-			break;
+			// Construct period of counting...
+			String widgetTime = "";
+			if (data.dateUpdated == 0) {
+				widgetTime = "==0 ???";
+				Log.e(TAG, "data.dateUpdated==0");
+			} else {
+				widgetTime = formatWidgetTime(context, data.dateCleared, data.dateUpdated);
+			}
 
-		case NOTIFY_CLEAR:
-			data.clear();
-			break;
+			boolean isFound = false;
 
-		default:
-			// change nothing
-		}
-		if (data.changed) {
-			data.save();
-		}
+			if (data.numMentions > 0) {
+				isFound = true;
+				widgetText += (widgetText.length() > 0 ? "\n" : "")
+						+ formatMessage(context,
+								R.string.appwidget_new_mention_format,
+								data.numMentions,
+								R.string.appwidget_mention_singular,
+								R.string.appwidget_mention_plural);
+			}
+			if (data.numMessages > 0) {
+				isFound = true;
+				widgetText += (widgetText.length() > 0 ? "\n" : "")
+						+ formatMessage(context,
+								R.string.appwidget_new_message_format,
+								data.numMessages,
+								R.string.appwidget_message_singular,
+								R.string.appwidget_message_plural);
+			}
+			if (data.numTweets > 0) {
+				isFound = true;
+				widgetText += (widgetText.length() > 0 ? "\n" : "")
+						+ formatMessage(context,
+								R.string.appwidget_new_tweet_format,
+								data.numTweets, R.string.appwidget_tweet_singular,
+								R.string.appwidget_tweet_plural);
+			}
+			if (!isFound) {
+				widgetComment = data.nothingPref;
+			}
 
-		// TODO: Widget design...
+			Log.d(TAG, "updateAppWidget text=\"" + widgetText.replaceAll("\n", "; ") + "\"; comment=\""
+					+ widgetComment + "\"");
 
-		// "Text" is what is show in bold
-		String widgetText = "";
-		// And the "Comment" is less visible, below the "Text"
-		String widgetComment = "";
+			// Construct the RemoteViews object. It takes the package name (in our
+			// case, it's our
+			// package, but it needs this because on the other side it's the widget
+			// host inflating
+			// the layout from our package).
+			RemoteViews views = new RemoteViews(context.getPackageName(),
+					R.layout.appwidget);
 
-		// Construct period of counting...
-		String widgetTime = "";
-		if (data.dateUpdated == 0) {
-			widgetTime = "==0 ???";
-			Log.e(TAG, "data.dateUpdated==0");
-		} else {
-			widgetTime = formatWidgetTime(context, data.dateCleared, data.dateUpdated);
-		}
+			if (widgetText.length() == 0) {
+				views
+						.setViewVisibility(R.id.appwidget_text,
+								android.view.View.GONE);
+			}
+			if (widgetComment.length() == 0) {
+				views.setViewVisibility(R.id.appwidget_comment,
+						android.view.View.GONE);
+			}
 
-		boolean isFound = false;
+			if (widgetText.length() > 0) {
+				views.setViewVisibility(R.id.appwidget_text,
+						android.view.View.VISIBLE);
+				views.setTextViewText(R.id.appwidget_text, widgetText);
+			}
+			if (widgetComment.length() > 0) {
+				views.setViewVisibility(R.id.appwidget_comment,
+						android.view.View.VISIBLE);
+				views.setTextViewText(R.id.appwidget_comment, widgetComment);
+			}
+			views.setTextViewText(R.id.appwidget_time, widgetTime);
 
-		if (data.numMentions > 0) {
-			isFound = true;
-			widgetText += (widgetText.length() > 0 ? "\n" : "")
-					+ formatMessage(context,
-							R.string.appwidget_new_mention_format,
-							data.numMentions,
-							R.string.appwidget_mention_singular,
-							R.string.appwidget_mention_plural);
-		}
-		if (data.numMessages > 0) {
-			isFound = true;
-			widgetText += (widgetText.length() > 0 ? "\n" : "")
-					+ formatMessage(context,
-							R.string.appwidget_new_message_format,
-							data.numMessages,
-							R.string.appwidget_message_singular,
-							R.string.appwidget_message_plural);
-		}
-		if (data.numTweets > 0) {
-			isFound = true;
-			widgetText += (widgetText.length() > 0 ? "\n" : "")
-					+ formatMessage(context,
-							R.string.appwidget_new_tweet_format,
-							data.numTweets, R.string.appwidget_tweet_singular,
-							R.string.appwidget_tweet_plural);
-		}
-		if (!isFound) {
-			widgetComment = data.nothingPref;
-		}
+			// When user clicks on widget, launch main AndTweet activity
+			// Intent defineIntent = new Intent(android.content.Intent.ACTION_MAIN);
+			Intent defineIntent = new Intent(context,
+					com.xorcode.andtweet.TweetListActivity.class);
 
-		Log.d(TAG, "updateAppWidget text=\"" + widgetText + "\"; comment=\""
-				+ widgetComment + "\"");
+			PendingIntent pendingIntent = PendingIntent.getActivity(context,
+					0 /* no requestCode */, defineIntent, 0 /* no flags */);
+			views.setOnClickPendingIntent(R.id.widget, pendingIntent);
 
-		// Construct the RemoteViews object. It takes the package name (in our
-		// case, it's our
-		// package, but it needs this because on the other side it's the widget
-		// host inflating
-		// the layout from our package).
-		RemoteViews views = new RemoteViews(context.getPackageName(),
-				R.layout.appwidget);
-
-		if (widgetText.length() == 0) {
-			views
-					.setViewVisibility(R.id.appwidget_text,
-							android.view.View.GONE);
-		}
-		if (widgetComment.length() == 0) {
-			views.setViewVisibility(R.id.appwidget_comment,
-					android.view.View.GONE);
-		}
-
-		if (widgetText.length() > 0) {
-			views.setViewVisibility(R.id.appwidget_text,
-					android.view.View.VISIBLE);
-			views.setTextViewText(R.id.appwidget_text, widgetText);
-		}
-		if (widgetComment.length() > 0) {
-			views.setViewVisibility(R.id.appwidget_comment,
-					android.view.View.VISIBLE);
-			views.setTextViewText(R.id.appwidget_comment, widgetComment);
-		}
-		views.setTextViewText(R.id.appwidget_time, widgetTime);
-
-		// When user clicks on widget, launch main AndTweet activity
-		// Intent defineIntent = new Intent(android.content.Intent.ACTION_MAIN);
-		Intent defineIntent = new Intent(context,
-				com.xorcode.andtweet.TweetListActivity.class);
-
-		PendingIntent pendingIntent = PendingIntent.getActivity(context,
-				0 /* no requestCode */, defineIntent, 0 /* no flags */);
-		views.setOnClickPendingIntent(R.id.widget, pendingIntent);
-
-		// Tell the widget manager
-		if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-			// TODO: Is this right?
-			// All instances will be updated
-			appWidgetManager.updateAppWidget(new ComponentName(context, this
-					.getClass()), views);
-		} else {
-			appWidgetManager.updateAppWidget(appWidgetId, views);
+			// Tell the widget manager
+			if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+				// TODO: Is this right?
+				// All instances will be updated
+				appWidgetManager.updateAppWidget(new ComponentName(context, this
+						.getClass()), views);
+			} else {
+				appWidgetManager.updateAppWidget(appWidgetId, views);
+			}
+			Ok = true;
+		} catch (Exception e) {
+			Log.e(TAG, "inst=" + instanceId + "; updateAppWidget exception: " + e.toString() );
+			
+		} finally {
+			Log.d(TAG, "inst=" + instanceId + "; updateAppWidget " + (Ok ? "succeded" : "failed") );
 		}
 	}
 

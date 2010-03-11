@@ -1,6 +1,8 @@
 package com.xorcode.andtweet;
 
+import android.app.AlarmManager;
 import android.content.Intent;
+import android.app.PendingIntent;
 import android.text.format.Time;
 import android.util.Log;
 import com.xorcode.andtweet.appwidget.AndTweetAppWidgetProvider;
@@ -171,6 +173,10 @@ public class AndTweetAppWidgetProviderTest extends ActivityTestCase {
     	numTweets = 1;
     	msgType = NOTIFY_TIMELINE;
     	updateWidgets(numTweets, msgType);
+    	
+    	// 15 seconds to complete updates
+    	// Shorter period sometimes doesn't work (processes are being closed...)
+    	Thread.sleep(25000);
     }
     
 	/** 
@@ -178,16 +184,100 @@ public class AndTweetAppWidgetProviderTest extends ActivityTestCase {
 	 * if there are some installed... (e.g. on the Home screen...) 
 	 * @see AndTweetAppWidgetProvider
 	 */
-	private void updateWidgets(int numTweets, int msgType) {
-    	Context context = getInstrumentation().getContext();
+	private void updateWidgets(int numTweets, int msgType){
+		try {
+		updateWidgetsNow(numTweets, msgType);
+		//updateWidgetsThreads(numTweets, msgType);
+		//updateWidgetsPending(numTweets, msgType);
+		} catch (Exception e) {
+			
+		}
+	}
+
+    
+	/** 
+	 * Send Update intent to AndTweet Widget(s),
+	 * if there are some installed... (e.g. on the Home screen...) 
+	 * @see AndTweetAppWidgetProvider
+	 */
+	private void updateWidgetsNow(int numTweets, int msgType){
+    	Context context = getInstrumentation().getTargetContext();
+    	//Context context = getInstrumentation().getContext();
 
     	Log.i(TAG,"Sending update; numTweets=" + numTweets + "; msgType=" + msgType);
-    	
+
     	Intent intent = new Intent(ACTION_APPWIDGET_UPDATE);
 		intent.putExtra(EXTRA_NUMTWEETS, numTweets);
 		intent.putExtra(EXTRA_MSGTYPE, msgType);
 		context.sendBroadcast(intent);
+    	
 	}
+	
     
+	/** 
+	 * Send Update intent to AndTweet Widget(s),
+	 * if there are some installed... (e.g. on the Home screen...) 
+	 * @see AndTweetAppWidgetProvider
+	 * For some reason it sends Intents with the same "Extra" info
+	 */
+	private void updateWidgetsPending(int numTweets, int msgType) throws Exception {
+		
+		// Let's try pending intents
+    	Context context = getInstrumentation().getTargetContext();
+    	//Context context = getInstrumentation().getContext();
+    	long triggerTime;
+
+    	Log.i(TAG,"Sending update; numTweets=" + numTweets + "; msgType=" + msgType);
+
+    	triggerTime = System.currentTimeMillis() + 3000;
+    	Intent intent = new Intent(ACTION_APPWIDGET_UPDATE);
+    	intent.addCategory("msgType" + msgType);
+		intent.putExtra(EXTRA_NUMTWEETS, numTweets);
+		intent.putExtra(EXTRA_MSGTYPE, msgType);
+    	
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        PendingIntent pendingUpdate = PendingIntent.getBroadcast(context,
+        		0 /* no requestCode */,
+                intent, 
+                0 /* no flags */);
+        
+        am.cancel(pendingUpdate);
+        am.set(AlarmManager.RTC, triggerTime, pendingUpdate);
+
+        Thread.sleep(5000);
+		
+	}
+
+    
+	/** 
+	 * Send Update intent to AndTweet Widget(s),
+	 * if there are some installed... (e.g. on the Home screen...) 
+	 * @see AndTweetAppWidgetProvider
+	 */
+	private void updateWidgetsThreads(int numTweets, int msgType) {
+		IntentSender runner = new IntentSender(numTweets, msgType);
+		runner.start();
+	}
+	
+	class IntentSender extends Thread {
+		int numTweets;
+		int msgType;
+		public IntentSender(int numTweets, int msgType) {
+			this.numTweets = numTweets;
+			this.msgType = msgType;
+		}
+		
+		public void run() {
+	    	Context context = getInstrumentation().getContext();
+
+	    	Log.i(TAG,"Sending update; numTweets=" + numTweets + "; msgType=" + msgType);
+	    	
+	    	Intent intent = new Intent(ACTION_APPWIDGET_UPDATE);
+			intent.putExtra(EXTRA_NUMTWEETS, numTweets);
+			intent.putExtra(EXTRA_MSGTYPE, msgType);
+			context.sendBroadcast(intent);
+		}
+	}
+	
     
 }

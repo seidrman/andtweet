@@ -139,7 +139,7 @@ public class AndTweetAppWidgetData {
 				}
 				prefs.commit();
 				Log.d(TAG, "Prefs for appWidgetId=" + mappWidgetId
-				+ "were saved, nonthing='" + nothingPref + "'");
+				+ " were saved, nothing='" + nothingPref + "'");
 				Ok = true;
 			}
 		}
